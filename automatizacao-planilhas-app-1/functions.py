@@ -2,12 +2,15 @@ import PySimpleGUI as sg
 import pandas as pd
 import openpyxl
 import tkinter as tk
+import shutil
+
+
 from tkinter import ttk
 from tkinter.simpledialog import askstring
 from tkinter import filedialog
 
 
-def create_table_popup(data, main_window):
+def create_table_popup(data, main_window, combo, data_ref):
      # Tamanho padrão da janela
     default_width = 800
     default_height = 800
@@ -57,13 +60,21 @@ def create_table_popup(data, main_window):
 
 
     def save_changes():
+
         try:
+            if combo == 'Folha de Pagamento':
+                name_file = f"FolhaPagto-{data_ref}_0011.xlsx"
+                file_type_select = "Excel files", "*.xlsx"
+            elif combo == 'Centro de Trabalho':
+                name_file = f'centro_de_trabalho.csv'
+                file_type_select = "CSV files", "*.csv"
+            elif combo == 'Códigos de Débito e Crédito':
+                name_file = 'codigos.csv'
+                file_type_select = "CSV files", "*.csv"
+
             # Perguntar ao usuário onde deseja salvar a tabela editada
-            file_path = filedialog.asksaveasfilename(defaultextension=".xlsx",
-                                                    filetypes=[("CSV files", "*.csv"),
-                                                                ("Excel files", "*.xlsx")],
-                                                    title="Salvar Tabela Editada",
-                                                    initialfile="planilha_importada")
+            file_path = filedialog.asksaveasfilename(filetypes=[file_type_select], title="Salvar Tabela Editada", initialfile=name_file)
+
             if file_path:
                 # Determine the file extension
                 if file_path.lower().endswith('.csv'):
@@ -101,7 +112,7 @@ def create_table_popup(data, main_window):
 
     def cancel_edit():
         table_window.destroy()
-        main_window['-EDIT-'].update(disabled=False) # Para garantir que o botão '-EDIT_CSV-' seja ativado
+        main_window['-EDIT-'].update(disabled=False) # Para garantir que o botão '-EDIT-' seja ativado
     
     def add_new_data():
         # Adicione uma nova linha vazia à tabela
@@ -124,6 +135,41 @@ def create_table_popup(data, main_window):
     tree.bind('<Double-1>', edit_cell)  # Duplo clique para editar células
 
     table_window.protocol('WM_DELETE_WINDOW', cancel_edit) # Isso vincula a função cancel_edit para ser chamada quando a janela é fechada usando o botão de fechar (X) sg.WINDOW_CLOSED
+
+
+def save_sheet(main_window, file_path, select_combo, data_ref):
+
+    try:
+        if select_combo == 'Folha de Pagamento':
+            name_file = f"FolhaPagto-{data_ref}_0011.xlsx"
+            file_type_select = "Excel files", "*.xlsx"
+        elif select_combo == 'Centro de Trabalho':
+            name_file = f'centro_de_trabalho.csv'
+            file_type_select = "CSV files", "*.csv"
+        elif select_combo == 'Códigos de Débito e Crédito':
+            name_file = 'codigos.csv'
+            file_type_select = "CSV files", "*.csv"
+        
+        # Perguntar ao usuário onde deseja salvar a tabela editada
+        file_new_path = filedialog.asksaveasfilename(filetypes=[file_type_select], title="Salvar Planilha Selecionada", initialfile=name_file)
+
+        if file_new_path:
+            # Determine the file extension
+            if file_new_path.lower().endswith('.csv'):
+                # Copy the content of the file to the new location
+                shutil.copyfile(file_path, file_new_path)
+
+            elif file_new_path.lower().endswith('.xlsx'):
+                # Copy the content of the file to the new location
+                shutil.copyfile(file_path, file_new_path)
+
+        
+            sg.popup(f'Tabela editada salva em:\n{file_new_path}')
+
+            main_window.finalize()
+
+    except Exception as e:
+        return sg.popup_error(f'Ocorreu um erro, verifique se os caminhos são diferentes: {str(e)}')
 
 
 def analyze_centro_trabalho_e_codigos(data, target_column):
@@ -172,7 +218,7 @@ def analyze_folha_pamento(data_folha):
     num_linhas = len(data_folha)
     num_colunas = len(data_folha.columns)
     df_str = display_dataframe_in_multiline_inicial(df_soma_fp)
-    soma_total = soma_colunas.sum()
+    soma_total = soma_colunas.sum().round(2)
 
     return num_linhas, num_colunas, soma_total, df_str
 
@@ -181,12 +227,12 @@ def generate(data_ref):
     try:
         data_codigos = pd.read_csv('utils\codigos.csv', encoding='ISO-8859-1')
 
-        caminho = f"input\\folha_de_pagamento_{data_ref}.xlsx"
+        caminho = f"input\\FolhaPagto-{data_ref}_0011.xlsx"
         data_folha = pd.read_excel(caminho, header=3)
 
         data_formatada = f"{data_ref[:2]}/{data_ref[2:4]}/{data_ref[4:]}"
 
-        num_linhas, num_colunas, soma_total, df_str, mensagem, resumo, resultado, resultado_situacao = treatment_folha_de_pagamento(data_folha)
+        num_linhas, num_colunas, soma_total, df_str, mensagem, resumo, lista_resumo, resultado, resultado_situacao = treatment_folha_de_pagamento(data_folha)
 
         df_ref = resumo.set_index('CR')
         saida = pd.DataFrame(columns=['DATA', 'TIPO', 'DEBITO', 'CREDITO', 'DESCRICAO COMPLETA', 'VALOR', 'UNIDADE DE NEGOCIO', 'CR'])
@@ -204,14 +250,18 @@ def generate(data_ref):
                 codigo2_correspondente = linha['CREDITO']
                 descricao_correspondente = linha['DESCRICAO']
                 folha_correspondente = linha['COLUNA DA FOLHA']
-                valor_correspondente = df_ref.loc[cr_index, folha_correspondente]
-                unidade_correspondente = df_ref.loc[cr_index, 'UNIDADE DE NEGOCIO']
-                ref_completa = f'{descricao_correspondente} {folha_correspondente}'
 
-                if valor_correspondente > 0:
-                    saida.loc[len(saida)] = [data_formatada, 'MANUAL', codigo1_correspondente, codigo2_correspondente, ref_completa, valor_correspondente, unidade_correspondente, cr_index]
+                if folha_correspondente in lista_resumo['LISTA'].values:
+                    valor_correspondente = df_ref.loc[cr_index, folha_correspondente]
+                    unidade_correspondente = df_ref.loc[cr_index, 'UNIDADE DE NEGOCIO']
+                    ref_completa = f'{descricao_correspondente} {folha_correspondente}'
+
+                    if valor_correspondente > 0:
+                        saida.loc[len(saida)] = [data_formatada, 'MANUAL', codigo1_correspondente, codigo2_correspondente, ref_completa, valor_correspondente, unidade_correspondente, cr_index]
+                    else:
+                        saida = saida
                 else:
-                    saida = saida
+                    saida
 
             resultado_xlsx = f'output/export_folha_de_pagamento_{data_ref}.xlsx'
             resultado_csv = f'output/export_folha_de_pagamento_{data_ref}.csv'
@@ -241,6 +291,8 @@ def correlation_between_spreadsheets_folha_pagamento_e_centro_trabalho(data_folh
     soma_condicional['VALOR'] = soma_condicional.sum(axis=1)
 
     resumo = soma_condicional.reset_index()
+    select_columns = soma_condicional.columns[1:]
+    lista_resumo = pd.DataFrame({'LISTA': select_columns})
     
     resultado_situacao = soma_condicional[['VALOR']].round(2)
     resultado_situacao.reset_index(inplace=True)
@@ -255,7 +307,7 @@ def correlation_between_spreadsheets_folha_pagamento_e_centro_trabalho(data_folh
 
     #print(f'Veja a relação a seguir: \n \n {linhas_com_nulos_situacao}')
 
-    return mensagem, resumo, resultado, resultado_situacao
+    return mensagem, resumo, lista_resumo, resultado, resultado_situacao
 
 
 def treatment_folha_de_pagamento(data_folha):
@@ -280,9 +332,9 @@ def treatment_folha_de_pagamento(data_folha):
     data_folha['DIV. RH'].head()
 
     num_linhas, num_colunas, soma_total, df_str = analyze_folha_pamento(data_folha)
-    mensagem, resumo, resultado, resultado_situacao = correlation_between_spreadsheets_folha_pagamento_e_centro_trabalho(data_folha)
+    mensagem, resumo, lista_resumo, resultado, resultado_situacao = correlation_between_spreadsheets_folha_pagamento_e_centro_trabalho(data_folha)
 
-    return num_linhas, num_colunas, soma_total, df_str, mensagem, resumo, resultado, resultado_situacao
+    return num_linhas, num_colunas, soma_total, df_str, mensagem, resumo, lista_resumo, resultado, resultado_situacao
 
 
 def load_default_sheet(main_window, sheet, data_ref):
@@ -306,10 +358,10 @@ def load_default_sheet(main_window, sheet, data_ref):
             main_window['-COLUMN_COUNT_CD-'].update(contagem_target_column)
 
         elif (sheet == 'Folha de Pagamento'):
-            caminho = f"input\\folha_de_pagamento_{data_ref}.xlsx"
+            caminho = f'input\FolhaPagto-{data_ref}_0011.xlsx'
             data_folha = pd.read_excel(caminho, header=3)
 
-            num_linhas, num_colunas, soma_total, df_str, mensagem, resumo, resultado, resultado_situacao = treatment_folha_de_pagamento(data_folha)
+            num_linhas, num_colunas, soma_total, df_str, mensagem, resumo, lista_resumo, resultado, resultado_situacao = treatment_folha_de_pagamento(data_folha)
 
             main_window['-NUM_ROWS_FP-'].update(num_linhas)
             main_window['-NUM_COLUMNS_FP-'].update(num_colunas)
@@ -323,15 +375,17 @@ def load_default_sheet(main_window, sheet, data_ref):
         sg.popup_error(f'Ocorreu um erro, veja se o arquivo foi importado: {str(e)}')
 
 
-def edit_file(file, main_window, combo):
+def edit_file(main_window, combo, data_ref):
     try:
-        if (combo == 'Centro de Trabalho') or (combo == 'Códigos de Débito e Crédito'):
-            data = pd.read_csv(file, encoding='ISO-8859-1')
-        elif (combo == 'Folha de Pagamento'):
-            data = pd.read_excel(file)
+        if combo == 'Centro de Trabalho':
+            data = pd.read_csv('utils\centro_de_trabalho.csv', encoding='ISO-8859-1')
+        elif combo == 'Códigos de Débito e Crédito':
+            data = pd.read_csv('utils\codigos.csv', encoding='ISO-8859-1')
+        elif combo == 'Folha de Pagamento':
+            data = pd.read_excel(f'input\FolhaPagto-{data_ref}_0011.xlsx')
 
-        main_window['-EDIT-'].update(disabled=True) # Para garantir que o botão '-EDIT_CSV-' seja desativado
-        create_table_popup(data, main_window) # Chamar a função para exibir a tabela
+        main_window['-EDIT-'].update(disabled=True) # Para garantir que o botão '-EDIT-' seja desativado
+        create_table_popup(data, main_window, combo, data_ref) # Chamar a função para exibir a tabela
         
     except Exception as e:
         sg.popup_error(f'Ocorreu um erro ao editar o arquivo CSV: {str(e)}')

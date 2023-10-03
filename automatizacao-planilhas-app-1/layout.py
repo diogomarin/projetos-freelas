@@ -6,7 +6,7 @@ from tkinter import ttk
 from tkinter.simpledialog import askstring
 from tkinter import filedialog
 
-from functions import edit_file, load_default_sheet, generate
+from functions import edit_file, load_default_sheet, generate, save_sheet
 
 
 # Definir a função para criar a janela inicial
@@ -42,11 +42,12 @@ def create_main_window():
     ]    
 
     layout = [
-        [sg.Text('Selecione qual arquivo deseja importar:')],
+        [sg.Text('Selecione qual arquivo deseja importar ou visualizar:')],
         [sg.Combo(['Centro de Trabalho', 'Códigos de Débito e Crédito', 'Folha de Pagamento'], key='-COMBO-', default_value='Folha de Pagamento'),
-         sg.Text('Informe a data de referência (ex. 31072023) :'), sg.InputText(key='-DATA_REF-', size=(15,2))],
+         sg.Text('Informe a data de referência da folha de pagamento (ex. 31072023) :'), sg.InputText(key='-DATA_REF-', size=(15,2))],
         [sg.Text('Informe o caminho do arquivo:'), sg.InputText(key='-FILE_PATH-'), sg.FileBrowse()],
-        [sg.Button('Visualizar e/ou Editar', key='-EDIT-'),
+        [sg.Button('Salvar Planilha', key='-SALVE-'),
+         sg.Button('Visualizar Planilha', key='-EDIT-'),
          sg.Button('Carregar Informações', key='-ATT-')],
     ]    
 
@@ -66,47 +67,51 @@ def create_main_window():
 # Criar a janela inicial
 main_window = create_main_window()
 
-# Dicionário para mapear os caminhos dos arquivos CSV para cada guia
-#csv_file_paths = {
-#    '-EDIT_CSV_CT-': '-FILE_PATH_CT-',
-#    '-EDIT_CSV_DC-': '-FILE_PATH_DC-',
-#    '-EDIT_CSV_FP-': '-FILE_PATH_FP-'
-#}
-
 # Loop de eventos
 while True:
     event, values = main_window.read()
 
     if event == sg.WINDOW_CLOSED:
         break
-    #elif event in csv_file_paths.keys():
-    #    file_path_key = csv_file_paths[event]  # Obter o key correspondente para o caminho do arquivo
-    #    file_path = values[file_path_key]
+
     elif event == '-ATT-':
         data_ref = values['-DATA_REF-']
-
+        
         if data_ref:
             load_default_sheet(main_window, 'Centro de Trabalho', data_ref)
             load_default_sheet(main_window, 'Códigos de Débito e Crédito', data_ref)
             load_default_sheet(main_window, 'Folha de Pagamento', data_ref)
-            #sg.popup('Sucesso, todas as planilhas foram carregadas.')
         else:
             sg.popup('Por favor, informe a data carregamento da folha de pagamento.')
 
     elif event == '-EDIT-':
-        file_path = values['-FILE_PATH-']
+        data_ref = values['-DATA_REF-']
         select_combo = values['-COMBO-']
-        if file_path:
-            edit_file(file_path, main_window, select_combo)
-            #main_window['-FILE_PATH-'].update('')
+
+        if select_combo != 'Folha de Pagamento':
+            edit_file(main_window, select_combo, '')
+        elif select_combo == 'Folha de Pagamento' and data_ref:
+            edit_file(main_window, select_combo, data_ref)
         else:
-            sg.popup('Por favor, selecione um arquivo.')
-            #main_window.finalize()
+            sg.popup('Por favor, selecione a data de referência.')
     
     elif event == '-GENERATE-':
         data_ref = values['-DATA_REF-']
+
         if data_ref:
             generate(data_ref)
+    
+    elif event == '-SALVE-':
+        file_path = values['-FILE_PATH-']
+        select_combo = values['-COMBO-']
+        data_ref = values['-DATA_REF-']
+
+        if select_combo != 'Folha de Pagamento' and file_path:
+            save_sheet(main_window, file_path, select_combo, '')
+        elif select_combo == 'Folha de Pagamento' and data_ref and file_path:
+            save_sheet(main_window, file_path, select_combo, data_ref)
+        else:
+            sg.popup('Atenção: \n 01) Para salvar um arquivo, você deve selecionar o arquivo desejado e escolher o caminho do mesmo. \n 02) Exclusivamente para Folha de Pagamento é obrigatório informar a data de referência')
 
 
 # Fechar a janela ao sair
