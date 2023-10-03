@@ -6,7 +6,7 @@ target_file = 'layout.py'
 
 # Configurações de compilação
 build_options = {
-    'packages': ['PySimpleGUI', 'pandas', 'openpyxl'],
+    'packages': ['PySimpleGUI', 'pandas', 'openpyxl', 'shutil'],
     'includes': ['tkinter', 'tkinter.ttk', 'tkinter.simpledialog'],
 }
 
